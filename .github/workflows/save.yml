@@ -1,0 +1,49 @@
+name: Save Result
+
+on:
+  repository_dispatch:
+    types: [save-crash]
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'JSON payload {source, gameId, result, hash, ts?}'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Determine payload
+        id: payload
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "payload=${{ toJSON(github.event.client_payload) }}" >> $GITHUB_OUTPUT
+          else
+            echo "payload=${{ inputs.payload }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save to docs/results.json
+        env:
+          PAYLOAD: ${{ steps.payload.outputs.payload }}
+        run: |
+          node scripts/save.js
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/results.json
+          git commit -m "chore: append result" || echo "No changes to commit"
+          git push
